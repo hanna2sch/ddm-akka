@@ -13,6 +13,8 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
@@ -40,6 +42,10 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 		private static final long serialVersionUID = -4667745204456518160L;
 		ActorRef<LargeMessageProxy.Message> dependencyMinerLargeMessageProxy;
 		int task;
+		int b_id;
+		int bb_id;
+		List<List<String>> b;
+		List<List<String>> bb;
 	}
 
 	////////////////////////
@@ -89,13 +95,20 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 	private Behavior<Message> handle(TaskMessage message) {
 		this.getContext().getLog().info("Working!");
 		// I should probably know how to solve this task, but for now I just pretend some work...
-
-		int result = message.getTask();
-		long time = System.currentTimeMillis();
-		Random rand = new Random();
-		int runtime = (rand.nextInt(2) + 2) * 1000;
-		while (System.currentTimeMillis() - time < runtime)
-			result = ((int) Math.abs(Math.sqrt(result)) * result) % 1334525;
+		List<List<String>> b = message.getB();
+		List<List<String>> bb = message.getBb();
+		int c_count = 0;
+		int cc_count = 0;
+		List<Comparer> result = new ArrayList<>();
+			for(List<String> c : b){
+				cc_count = 0;
+				for (List<String> cc : bb) {
+					if(c.containsAll(cc)) result.add(new Comparer(message.getBb_id(), message.getB_id(), cc_count, c_count));
+					if(cc.containsAll(c)) result.add(new Comparer(message.getB_id(), message.getBb_id(), c_count, cc_count));
+					cc_count +=1;
+				}
+				c_count +=1;
+			}
 
 		LargeMessageProxy.LargeMessage completionMessage = new DependencyMiner.CompletionMessage(this.getContext().getSelf(), result);
 		this.largeMessageProxy.tell(new LargeMessageProxy.SendMessage(completionMessage, message.getDependencyMinerLargeMessageProxy()));

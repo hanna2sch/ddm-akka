@@ -102,12 +102,31 @@ public class InputReader extends AbstractBehavior<InputReader.Message> {
 			batch.add(line);
 		}
 
-		message.getReplyTo().tell(new DependencyMiner.BatchMessage(this.id, batch));
+		message.getReplyTo().tell(new DependencyMiner.BatchMessage(this.id, batch_transpose(batch)));
+		//this.getContext().getLog().info("Batch No {}", this.reader);
+		//this.getContext().getLog().info(String.valueOf(batch_transpose(batch).size()));
 		return this;
 	}
 
 	private Behavior<Message> handle(PostStop signal) throws IOException {
 		this.reader.close();
 		return this;
+	}
+
+	//TODO:
+	//akka://ddm/user/master/dependencyMiner/inputReader_1#164427867] was not delivered. [1] dead letters encountered.
+
+
+	private List<List<String>> batch_transpose(List<String[]> batch) {
+		List<List<String>> result = new ArrayList<>();
+		for (int i = 0; i < batch.get(0).length; i++) {
+			List<String> column = new ArrayList<>();
+			for (String[] row : batch){
+				column.add(row[i]);
+			}
+			column.remove(0);
+			result.add(column);
+		}
+		return result;
 	}
 }
