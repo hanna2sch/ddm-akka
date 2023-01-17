@@ -1,5 +1,6 @@
 package de.ddm.actors.profiling;
 
+import akka.actor.Actor;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.Behavior;
 import akka.actor.typed.javadsl.AbstractBehavior;
@@ -47,7 +48,13 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 		List<List<String>> b;
 		List<List<String>> bb;
 	}
-
+	@Getter
+	@NoArgsConstructor
+	@AllArgsConstructor
+	public static class WaitingMessage implements Message {
+		private static final long serialVersionUID = -5246338806092216252L;
+		ActorRef<LargeMessageProxy.Message> dependencyMinerLargeMessageProxy;
+	}
 	////////////////////////
 	// Actor Construction //
 	////////////////////////
@@ -82,6 +89,7 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 		return newReceiveBuilder()
 				.onMessage(ReceptionistListingMessage.class, this::handle)
 				.onMessage(TaskMessage.class, this::handle)
+				.onMessage(WaitingMessage.class, this::handle)
 				.build();
 	}
 
@@ -113,6 +121,13 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 		LargeMessageProxy.LargeMessage completionMessage = new DependencyMiner.CompletionMessage(this.getContext().getSelf(), result);
 		this.largeMessageProxy.tell(new LargeMessageProxy.SendMessage(completionMessage, message.getDependencyMinerLargeMessageProxy()));
 
+		return this;
+	}
+
+	private Behavior<Message> handle(WaitingMessage message) throws InterruptedException {
+		Thread.sleep(1234);
+		LargeMessageProxy.LargeMessage temp_message = new DependencyMiner.CompletionMessage(this.getContext().getSelf(), new ArrayList<>());
+		this.largeMessageProxy.tell(new LargeMessageProxy.SendMessage(temp_message, message.getDependencyMinerLargeMessageProxy()));
 		return this;
 	}
 }

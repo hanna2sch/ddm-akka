@@ -22,7 +22,6 @@ import de.ddm.actors.profiling.Comparer;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 
 public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 
@@ -87,6 +86,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 
 	private DependencyMiner(ActorContext<Message> context) {
 		super(context);
+		this.getContext().getLog().info("Hello from DepMiner Constructor");
 		this.inputFiles = InputConfigurationSingleton.get().getInputFiles();
 		this.headerLines = new String[this.inputFiles.length][];
 		this.inputReaders = new ArrayList<>(inputFiles.length);
@@ -97,7 +97,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 
 		this.dependencyWorkers = new ArrayList<>();
 		this.batchMessages = new ArrayList<>();
-
+		this.getContext().getLog().info("Hello from DepMiner Constructor_end");
 		context.getSystem().receptionist().tell(Receptionist.register(dependencyMinerService, context.getSelf()));
 	}
 
@@ -146,7 +146,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	}
 
 	private Behavior<Message> handle(BatchMessage message) {
-		//TODO: implement
+		//this.getContext().getLog().info("Hello form BatchMessage");
 		if (message.getBatch().size() != 0)
 			this.inputReaders.get(message.getId()).tell(new InputReader.ReadBatchMessage(this.getContext().getSelf()));
 			//this.getContext().getLog().info("Filenumber: {}",String.valueOf(this.inputFiles.length));
@@ -159,8 +159,9 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	private int count2 = 0;
 	private int batchcount = 0;
 	private void handle(ActorRef<DependencyWorker.Message> depW){
-		if (this.count >= this.inputReaders.size()) return;
 		if(this.count >= this.inputReaders.size() && this.batchcount == 0) this.end();
+		if (this.count >= this.inputReaders.size()) return;
+
 		BatchMessage b = this.batchMessages.get(this.count);
 		BatchMessage bb = this.batchMessages.get(this.count2);
 		this.count2 +=1;
@@ -170,6 +171,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		}
 		depW.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy, b.getId(), b.getId(), bb.getId(), b.getBatch(), bb.getBatch()));
 		this.batchcount +=1;
+		//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchcount);
 	}
 
 	private Behavior<Message> handle(RegistrationMessage message) {
@@ -179,20 +181,27 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 			this.getContext().watch(dependencyWorker);
 			// The worker should get some work ... let me send her something before I figure out what I actually want from her.
 			// I probably need to idle the worker for a while, if I do not have work for it right now ... (see master/worker pattern)
-
+			if(this.batchMessages.size() != this.inputReaders.size()) {
+				batchcount +=1;
+				//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchcount);
+				dependencyWorker.tell(new DependencyWorker.WaitingMessage(this.largeMessageProxy));
+			}
 			//dependencyWorker.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy, 42));
 			handle(dependencyWorker);
-			this.getContext().getLog().info("Message told to Dep Worker");
+			//this.getContext().getLog().info("Message told to Dep Worker");
 
 		}
 		return this;
 	}
 
 	private Behavior<Message> handle(CompletionMessage message) {
+		this.getContext().getLog().info("Hello from CompletionMessage");
 		ActorRef<DependencyWorker.Message> dependencyWorker = message.getDependencyWorker();
 		// If this was a reasonable result, I would probably do something with it and potentially generate more work ... for now, let's just generate a random, binary IND.
 		this.batchcount -=1;
+		//this.getContext().getLog().info("!!!!!!!!!!new -Batchcount: {}", batchcount);
 		if (this.headerLines[0] != null && !(message.getResult().isEmpty())) {
+			List<InclusionDependency> inds = new ArrayList<>();
 			for (Comparer com : message.getResult()){
 				int dependent = com.getFileid();
 				int referenced = com.getCompare_fileid();
@@ -201,12 +210,10 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 				String[] dependentAttributes = {this.headerLines[dependent][com.getColid()]};
 				String[] referencedAttributes = {this.headerLines[referenced][com.getCompare_colid()]};
 				InclusionDependency ind = new InclusionDependency(dependentFile, dependentAttributes, referencedFile, referencedAttributes);
-				List<InclusionDependency> inds = new ArrayList<>(1);
 				inds.add(ind);
 
-				this.resultCollector.tell(new ResultCollector.ResultMessage(inds));
 			}
-
+			this.resultCollector.tell(new ResultCollector.ResultMessage(inds));
 		}
 		handle(dependencyWorker);
 		// I still don't know what task the worker could help me to solve ... but let me keep her busy.
