@@ -69,7 +69,8 @@ public class Guardian extends AbstractBehavior<Guardian.Message> {
 
 		this.reaper = context.spawn(Reaper.create(), Reaper.DEFAULT_NAME);
 		this.master = this.isMaster() ? context.spawn(Master.create(), Master.DEFAULT_NAME) : null;
-		for (int i = 0; i < (new SystemConfiguration().getNumWorkers()); i++){
+		int temp = new SystemConfiguration().getNumWorkers();
+		for (int i = 0; i < temp; i++){
 			this.workers.add(context.spawn(Worker.create(), Worker.DEFAULT_NAME+i));
 		}
 

@@ -161,7 +161,11 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	private void handle(ActorRef<DependencyWorker.Message> depW){
 		if(this.count >= this.inputReaders.size() && this.batchcount == 0) this.end();
 		if (this.count >= this.inputReaders.size()) return;
-
+		if(this.batchMessages.size() != this.inputReaders.size()){
+			depW.tell(new DependencyWorker.WaitingMessage(this.largeMessageProxy));
+			batchcount +=1;
+			//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchcount);
+		}
 		BatchMessage b = this.batchMessages.get(this.count);
 		BatchMessage bb = this.batchMessages.get(this.count2);
 		this.count2 +=1;
@@ -203,17 +207,20 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		if (this.headerLines[0] != null && !(message.getResult().isEmpty())) {
 			List<InclusionDependency> inds = new ArrayList<>();
 			for (Comparer com : message.getResult()){
-				int dependent = com.getFileid();
-				int referenced = com.getCompare_fileid();
-				File dependentFile = this.inputFiles[dependent];
-				File referencedFile = this.inputFiles[referenced];
-				String[] dependentAttributes = {this.headerLines[dependent][com.getColid()]};
-				String[] referencedAttributes = {this.headerLines[referenced][com.getCompare_colid()]};
-				InclusionDependency ind = new InclusionDependency(dependentFile, dependentAttributes, referencedFile, referencedAttributes);
-				inds.add(ind);
-
+				if(com.getFileid()!=com.getCompare_fileid() && com.getColid()!=com.getCompare_colid()){
+					int dependent = com.getFileid();
+					int referenced = com.getCompare_fileid();
+					File dependentFile = this.inputFiles[dependent];
+					File referencedFile = this.inputFiles[referenced];
+					String[] dependentAttributes = {this.headerLines[dependent][com.getColid()]};
+					String[] referencedAttributes = {this.headerLines[referenced][com.getCompare_colid()]};
+					InclusionDependency ind = new InclusionDependency(dependentFile, dependentAttributes, referencedFile, referencedAttributes);
+					inds.add(ind);
+					this.getContext().getLog().info("!!!!!!!!!!!!!!!!!!!!!!!! Dep found: File{}Col{}->File{}Col{}", com.getFileid(), com.getCompare_colid(), com.getCompare_fileid(), com.getCompare_colid());
+					this.resultCollector.tell(new ResultCollector.ResultMessage(inds));
+				}
 			}
-			this.resultCollector.tell(new ResultCollector.ResultMessage(inds));
+
 		}
 		handle(dependencyWorker);
 		// I still don't know what task the worker could help me to solve ... but let me keep her busy.
