@@ -20,6 +20,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class InputReader extends AbstractBehavior<InputReader.Message> {
 
@@ -123,7 +124,8 @@ public class InputReader extends AbstractBehavior<InputReader.Message> {
 				column.add(row[i]);
 			}
 			column.remove(0);
-			result.add(column);
+			List<String> uniquecolumn = column.stream().distinct().collect(Collectors.toList());
+			result.add(uniquecolumn);
 		}
 		this.getContext().getLog().info(String.valueOf(result.size()));
 		return result;
