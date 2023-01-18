@@ -113,13 +113,11 @@ public class InputReader extends AbstractBehavior<InputReader.Message> {
 		return this;
 	}
 
-	//TODO:
-	//akka://ddm/user/master/dependencyMiner/inputReader_1#164427867] was not delivered. [1] dead letters encountered.
-
 
 	private List<List<String>> batch_transpose(List<String[]> batch) {
 		List<List<String>> result = new ArrayList<>();
-		for (int i = 0; i < batch.get(0).length; i++) {
+		int temp = batch.get(0).length;
+		for (int i = 0; i < temp; i++) {
 			List<String> column = new ArrayList<>();
 			for (String[] row : batch){
 				column.add(row[i]);
@@ -127,6 +125,7 @@ public class InputReader extends AbstractBehavior<InputReader.Message> {
 			column.remove(0);
 			result.add(column);
 		}
+		this.getContext().getLog().info(String.valueOf(result.size()));
 		return result;
 	}
 }

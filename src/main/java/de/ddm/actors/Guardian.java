@@ -71,7 +71,7 @@ public class Guardian extends AbstractBehavior<Guardian.Message> {
 		this.master = this.isMaster() ? context.spawn(Master.create(), Master.DEFAULT_NAME) : null;
 		int temp = new SystemConfiguration().getNumWorkers();
 		for (int i = 0; i < temp; i++){
-			this.workers.add(context.spawn(Worker.create(), Worker.DEFAULT_NAME+i));
+			this.workers.add(context.spawn(Worker.create(), Worker.DEFAULT_NAME+"_"+i));
 		}
 
 		context.getSystem().receptionist().tell(Receptionist.register(guardianService, context.getSelf()));

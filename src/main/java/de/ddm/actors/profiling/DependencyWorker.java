@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message> {
 
@@ -94,6 +95,7 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 	}
 
 	private Behavior<Message> handle(ReceptionistListingMessage message) {
+		this.getContext().getLog().info("Worker received Message!");
 		Set<ActorRef<DependencyMiner.Message>> dependencyMiners = message.getListing().getServiceInstances(DependencyMiner.dependencyMinerService);
 		for (ActorRef<DependencyMiner.Message> dependencyMiner : dependencyMiners)
 			dependencyMiner.tell(new DependencyMiner.RegistrationMessage(this.getContext().getSelf()));
@@ -125,6 +127,7 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 	}
 
 	private Behavior<Message> handle(WaitingMessage message) throws InterruptedException {
+		this.getContext().getLog().info("Sleeping!");
 		Thread.sleep(1234);
 		LargeMessageProxy.LargeMessage temp_message = new DependencyMiner.CompletionMessage(this.getContext().getSelf(), new ArrayList<>());
 		this.largeMessageProxy.tell(new LargeMessageProxy.SendMessage(temp_message, message.getDependencyMinerLargeMessageProxy()));
