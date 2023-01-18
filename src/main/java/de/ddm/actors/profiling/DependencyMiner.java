@@ -12,17 +12,15 @@ import akka.actor.typed.receptionist.ServiceKey;
 import de.ddm.actors.patterns.LargeMessageProxy;
 import de.ddm.serialization.AkkaSerializable;
 import de.ddm.singletons.InputConfigurationSingleton;
-import de.ddm.singletons.SystemConfigurationSingleton;
 import de.ddm.structures.InclusionDependency;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import de.ddm.actors.profiling.Comparer;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-
+//TODO: filter multiple discoveries, get Endresult
 public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 
 	////////////////////
@@ -93,6 +91,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		for (int id = 0; id < this.inputFiles.length; id++)
 			this.inputReaders.add(context.spawn(InputReader.create(id, this.inputFiles[id]), InputReader.DEFAULT_NAME + "_" + id));
 		this.resultCollector = context.spawn(ResultCollector.create(), ResultCollector.DEFAULT_NAME);
+		this.countResultCollector = 0;
 		this.largeMessageProxy = this.getContext().spawn(LargeMessageProxy.create(this.getContext().getSelf().unsafeUpcast()), LargeMessageProxy.DEFAULT_NAME);
 
 		this.dependencyWorkers = new ArrayList<>();
@@ -111,6 +110,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	private final List<ActorRef<InputReader.Message>> inputReaders;
 	private final List<BatchMessage> batchMessages;
 	private final ActorRef<ResultCollector.Message> resultCollector;
+	private int countResultCollector;
 	private final ActorRef<LargeMessageProxy.Message> largeMessageProxy;
 
 	private final List<ActorRef<DependencyWorker.Message>> dependencyWorkers;
@@ -149,14 +149,13 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 
 	private Behavior<Message> handle(BatchMessage message) {
 		//this.getContext().getLog().info("Hello form BatchMessage");
-		this.getContext().getLog().info("Hello 3");
+		//this.getContext().getLog().info("Hello 3");
 		if (message.getBatch().size() != 0)
-			//TODO: fix!
 			//this.inputReaders.get(message.getId()).tell(new InputReader.ReadBatchMessage(this.getContext().getSelf()));
 			//this.getContext().getLog().info("Filenumber: {}",String.valueOf(this.inputFiles.length));
 			//this.getContext().getLog().info("Batch No: {}",message.getId());
 			this.batchMessages.add(message);
-		this.getContext().getLog().info("Bye 3");
+		//this.getContext().getLog().info("Bye 3");
 		return this;
 	}
 
@@ -194,11 +193,11 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 			this.getContext().watch(dependencyWorker);
 			// The worker should get some work ... let me send her something before I figure out what I actually want from her.
 			// I probably need to idle the worker for a while, if I do not have work for it right now ... (see master/worker pattern)
-			/*if(this.batchMessages.size() != this.inputReaders.size()) {
+			if(this.batchMessages.size() != this.inputReaders.size()) {
 				batchcount +=1;
 				//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchcount);
 				dependencyWorker.tell(new DependencyWorker.WaitingMessage(this.largeMessageProxy));
-			}*/
+			}
 			//dependencyWorker.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy, 42));
 			this.getContext().getLog().info("Message told to Dep Worker");
 			handle(dependencyWorker);
@@ -226,6 +225,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 					InclusionDependency ind = new InclusionDependency(dependentFile, dependentAttributes, referencedFile, referencedAttributes);
 					inds.add(ind);
 					//this.getContext().getLog().info("!!!!!!!!!!!!!!!!!!!!!!!! Dep found: File{}Col{}->File{}Col{}", com.getFileid(), com.getCompare_colid(), com.getCompare_fileid(), com.getCompare_colid());
+					countResultCollector += inds.size();
 					this.resultCollector.tell(new ResultCollector.ResultMessage(inds));
 				}
 			}
@@ -246,6 +246,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		this.resultCollector.tell(new ResultCollector.FinalizeMessage());
 		long discoveryTime = System.currentTimeMillis() - this.startTime;
 		this.getContext().getLog().info("Finished mining within {} ms!", discoveryTime);
+		this.getContext().getLog().info("Found {} INDs!", this.countResultCollector);
 	}
 
 	private Behavior<Message> handle(Terminated signal) {
