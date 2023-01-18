@@ -20,7 +20,9 @@ import lombok.NoArgsConstructor;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-//TODO: filter multiple discoveries, get Endresult
+//TODO: Error:  Encoder(akka://ddm)| Failed to serialize oversized message [de.ddm.actors.profiling.DependencyWorker$TaskMessage].
+//akka.remote.OversizedPayloadException: Discarding oversized payload sent to Some(Actor[]):
+// max allowed size 262144 bytes. Message type [de.ddm.actors.profiling.DependencyWorker$TaskMessage].
 public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 
 	////////////////////
@@ -171,6 +173,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		else if(this.count >= this.inputReaders.size() && this.batchcount == 0) this.end();
 		else if (this.count >= this.batchMessages.size()&& this.batchcount != 0) return;
 		else {
+			//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchcount);
 			BatchMessage b = this.batchMessages.get(this.count);
 			BatchMessage bb = this.batchMessages.get(this.count2);
 			this.count2 += 1;
@@ -180,7 +183,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 			}
 			this.batchcount += 1;
 			depW.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy, b.getId(), b.getId(), bb.getId(), b.getBatch(), bb.getBatch()));
-
+			//depW.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy, b.getId(), b.getId(), bb.getId(), tempList, tempList2));
 			//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchcount);
 		}
 	}
