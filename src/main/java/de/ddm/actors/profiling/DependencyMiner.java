@@ -163,17 +163,18 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 
 	private int count = 0;
 	private int count2 = 0;
-	private int batchcount = 0;
+	private boolean batchtoggle = false;
 	private void handle(ActorRef<DependencyWorker.Message> depW){
+		this.getContext().getLog().info("inputreadersize: {}, count: {}, batchtoggle: {}", inputReaders.size(), count, batchtoggle);
 		if(this.batchMessages.size() != this.inputReaders.size()){
-			batchcount +=1;
+			batchtoggle = true;
 			depW.tell(new DependencyWorker.WaitingMessage(this.largeMessageProxy));
-			//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchcount);
+			//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchtoggle);
 		}
-		else if(this.count >= this.inputReaders.size() && this.batchcount == 0) this.end();
-		else if (this.count >= this.batchMessages.size()&& this.batchcount != 0) return;
+		else if(this.count >= this.inputReaders.size() && !this.batchtoggle) this.end();
+		else if (this.count >= this.batchMessages.size()&& this.batchtoggle) return;
 		else {
-			//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchcount);
+			//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchtoggle);
 			BatchMessage b = this.batchMessages.get(this.count);
 			BatchMessage bb = this.batchMessages.get(this.count2);
 			this.count2 += 1;
@@ -181,10 +182,10 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 				this.count += 1;
 				this.count2 = this.count;
 			}
-			this.batchcount += 1;
+			this.batchtoggle =true;
 			depW.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy, b.getId(), b.getId(), bb.getId(), b.getBatch(), bb.getBatch()));
 			//depW.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy, b.getId(), b.getId(), bb.getId(), tempList, tempList2));
-			//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchcount);
+			//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchtoggle);
 		}
 	}
 
@@ -197,8 +198,8 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 			// The worker should get some work ... let me send her something before I figure out what I actually want from her.
 			// I probably need to idle the worker for a while, if I do not have work for it right now ... (see master/worker pattern)
 			if(this.batchMessages.size() != this.inputReaders.size()) {
-				batchcount +=1;
-				//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchcount);
+				batchtoggle =true;
+				//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchtoggle);
 				dependencyWorker.tell(new DependencyWorker.WaitingMessage(this.largeMessageProxy));
 			}
 			//dependencyWorker.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy, 42));
@@ -212,8 +213,8 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		//this.getContext().getLog().info("Hello from CompletionMessage");
 		ActorRef<DependencyWorker.Message> dependencyWorker = message.getDependencyWorker();
 		// If this was a reasonable result, I would probably do something with it and potentially generate more work ... for now, let's just generate a random, binary IND.
-		this.batchcount -=1;
-		//this.getContext().getLog().info("!!!!!!!!!!new -Batchcount: {}", batchcount);
+		this.batchtoggle =false;
+		//this.getContext().getLog().info("!!!!!!!!!!new -Batchcount: {}", batchtoggle);
 		if (this.headerLines[0] != null && !(message.getResult().isEmpty())) {
 
 			for (Comparer com : message.getResult()){
@@ -241,7 +242,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		//dependencyWorker.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy, 42));
 
 		// At some point, I am done with the discovery. That is when I should call my end method. Because I do not work on a completable task yet, I simply call it after some time.
-		if (this.count >= this.inputReaders.size() && this.batchcount == 0) this.end();
+		if (this.count >= this.inputReaders.size() && !this.batchtoggle) this.end();
 		return this;
 	}
 

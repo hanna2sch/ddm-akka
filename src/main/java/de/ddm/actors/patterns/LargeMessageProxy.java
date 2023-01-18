@@ -86,7 +86,7 @@ public class LargeMessageProxy extends AbstractBehavior<LargeMessageProxy.Messag
 
 	public static final String DEFAULT_NAME = "largeMessageProxy";
 
-	public static int MAX_MESSAGE_SIZE = 10000000;
+	public static int MAX_MESSAGE_SIZE = Integer.MAX_VALUE;
 
 	public static Behavior<Message> create(ActorRef<LargeMessage> parent) {
 		return Behaviors.setup(context -> new LargeMessageProxy(context, parent));
