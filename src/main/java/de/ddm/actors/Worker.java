@@ -47,8 +47,10 @@ public class Worker extends AbstractBehavior<Worker.Message> {
 		final int numWorkers = SystemConfigurationSingleton.get().getNumWorkers();
 
 		this.workers = new ArrayList<>(numWorkers);
-		for (int id = 0; id < numWorkers; id++)
+		for (int id = 0; id < numWorkers; id++){
 			this.workers.add(context.spawn(DependencyWorker.create(), DependencyWorker.DEFAULT_NAME + "_" + id, DispatcherSelector.fromConfig("akka.worker-pool-dispatcher")));
+			this.getContext().getLog().info("DependencyWorker no {} created", id);
+		}
 	}
 
 	/////////////////

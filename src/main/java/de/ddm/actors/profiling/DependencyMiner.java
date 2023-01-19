@@ -100,6 +100,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		this.batchMessages = new ArrayList<>();
 		//this.getContext().getLog().info("Hello from DepMiner Constructor_end");
 		context.getSystem().receptionist().tell(Receptionist.register(dependencyMinerService, context.getSelf()));
+		tasks = new ArrayList<>();
 	}
 
 	/////////////////
@@ -116,7 +117,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	private final ActorRef<LargeMessageProxy.Message> largeMessageProxy;
 
 	private final List<ActorRef<DependencyWorker.Message>> dependencyWorkers;
-
+	private final List<Task> tasks;
 	////////////////////
 	// Actor Behavior //
 	////////////////////
@@ -149,32 +150,27 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		return this;
 	}
 
+
 	private Behavior<Message> handle(BatchMessage message) {
-		//this.getContext().getLog().info("Hello form BatchMessage");
-		//this.getContext().getLog().info("Hello 3");
 		if (message.getBatch().size() != 0)
-			//this.inputReaders.get(message.getId()).tell(new InputReader.ReadBatchMessage(this.getContext().getSelf()));
-			//this.getContext().getLog().info("Filenumber: {}",String.valueOf(this.inputFiles.length));
-			//this.getContext().getLog().info("Batch No: {}",message.getId());
 			this.batchMessages.add(message);
-		//this.getContext().getLog().info("Bye 3");
 		return this;
 	}
 
 	private int count = 0;
 	private int count2 = 0;
 	private boolean batchtoggle = false;
-	private void handle(ActorRef<DependencyWorker.Message> depW){
+	private void handle(ActorRef<DependencyWorker.Message> depW){ //TODO: Dependencyworker muss hier Arbeit zugewiesen bekommen
+		// tasks.add(new Task(count, count2, this.batchMessages.get(this.count).getBatch(), this.batchMessages.get(this.count2).getBatch()));
 		this.getContext().getLog().info("inputreadersize: {}, count: {}, batchtoggle: {}", inputReaders.size(), count, batchtoggle);
 		if(this.batchMessages.size() != this.inputReaders.size()){
 			batchtoggle = true;
 			depW.tell(new DependencyWorker.WaitingMessage(this.largeMessageProxy));
-			//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchtoggle);
 		}
 		else if(this.count >= this.inputReaders.size() && !this.batchtoggle) this.end();
 		else if (this.count >= this.batchMessages.size()&& this.batchtoggle) return;
 		else {
-			//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchtoggle);
+			tasks.add(new Task(count, count2, this.batchMessages.get(this.count).getBatch(), this.batchMessages.get(this.count2).getBatch()));
 			BatchMessage b = this.batchMessages.get(this.count);
 			BatchMessage bb = this.batchMessages.get(this.count2);
 			this.count2 += 1;
@@ -183,9 +179,8 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 				this.count2 = this.count;
 			}
 			this.batchtoggle =true;
+			//TODO: implement following with task-organizer
 			depW.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy, b.getId(), b.getId(), bb.getId(), b.getBatch(), bb.getBatch()));
-			//depW.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy, b.getId(), b.getId(), bb.getId(), tempList, tempList2));
-			//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchtoggle);
 		}
 	}
 

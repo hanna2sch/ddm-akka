@@ -106,10 +106,9 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 		List<List<String>> b = message.getB();
 		List<List<String>> bb = message.getBb();
 		int c_count = 0;
-		int cc_count = 0;
 		List<Comparer> result = new ArrayList<>();
 			for(List<String> c : b){
-				cc_count = 0;
+				int cc_count = 0;
 				for (List<String> cc : bb) {
 					if(c.containsAll(cc)) result.add(new Comparer(message.getBb_id(), message.getB_id(), cc_count, c_count));
 					if(cc.containsAll(c)) result.add(new Comparer(message.getB_id(), message.getBb_id(), c_count, cc_count));
@@ -126,7 +125,7 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 
 	private Behavior<Message> handle(WaitingMessage message) throws InterruptedException {
 		this.getContext().getLog().info("Sleeping!");
-		Thread.sleep(1234);
+		Thread.sleep(2345);
 		LargeMessageProxy.LargeMessage temp_message = new DependencyMiner.CompletionMessage(this.getContext().getSelf(), new ArrayList<>());
 		this.largeMessageProxy.tell(new LargeMessageProxy.SendMessage(temp_message, message.getDependencyMinerLargeMessageProxy()));
 		return this;

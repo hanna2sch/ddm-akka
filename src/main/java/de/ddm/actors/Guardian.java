@@ -69,10 +69,7 @@ public class Guardian extends AbstractBehavior<Guardian.Message> {
 
 		this.reaper = context.spawn(Reaper.create(), Reaper.DEFAULT_NAME);
 		this.master = this.isMaster() ? context.spawn(Master.create(), Master.DEFAULT_NAME) : null;
-		int temp = new SystemConfiguration().getNumWorkers();
-		for (int i = 0; i < temp; i++){
-			this.workers.add(context.spawn(Worker.create(), Worker.DEFAULT_NAME+"_"+i));
-		}
+		this.worker = context.spawn(Worker.create(), Worker.DEFAULT_NAME);
 
 		context.getSystem().receptionist().tell(Receptionist.register(guardianService, context.getSelf()));
 
@@ -94,6 +91,7 @@ public class Guardian extends AbstractBehavior<Guardian.Message> {
 
 	private final ActorRef<Reaper.Message> reaper;
 	private ActorRef<Master.Message> master;
+	private ActorRef<Worker.Message> worker;
 	private List<ActorRef<Worker.Message>> workers = new ArrayList<>();
 
 	////////////////////
@@ -112,6 +110,7 @@ public class Guardian extends AbstractBehavior<Guardian.Message> {
 	private Behavior<Message> handle(StartMessage message) {
 		if (this.master != null)
 			this.master.tell(new Master.StartMessage());
+		//this.getContext().getLog().info("Numbers of DependencyWorkers used: {}", count_depWorker);
 		return this;
 	}
 
