@@ -127,7 +127,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	private final ActorRef<ResultCollector.Message> resultCollector;
 	private int countResultCollector;
 	private final ActorRef<LargeMessageProxy.Message> largeMessageProxy;
-	private List<Tuple> permutations = new ArrayList<>();
+	private List<int[]> permutations = new ArrayList<>();
 	//private List<Tuple> working = new ArrayList<>();
 	//private List<Tuple> done = new ArrayList<>();
 	private final List<ActorRef<DependencyWorker.Message>> dependencyWorkers;
@@ -168,20 +168,21 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		return this;
 	}
 
-
 	private Behavior<Message> handle(BatchMessage message) {
 		if(message.getBatch().size() != 0){
 			List<List<String>> templist = message.getBatch();
 			int colnumber = 0;
-			int temp = this.columns.size();
 			for(List<String> tempentry : templist){
 				List<String> distict_tempentry = tempentry.stream().distinct().collect(Collectors.toList());
 				this.columns.add(new Column(message.getId(),colnumber, distict_tempentry));
-				for(int i = 0; i < temp; i++){
-					Tuple tt = new Tuple(temp, i);
-					Tuple tt_inverted = new Tuple(i, temp);
-					if(!this.permutations.contains(tt) && !this.permutations.contains(tt_inverted))
-						this.permutations.add(new Tuple(temp, i));
+				colnumber+=1;
+
+				for (int i = -1; i < this.columns.size(); i++){
+					if(i==-1 || i==(this.columns.size()-1)) continue;
+					int array[] = new int[2];
+					array[0] = this.columns.size()-1;
+					array[1] = i;
+					this.permutations.add(array);
 				}
 			}
 		}
@@ -208,10 +209,12 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 
 	private void handle_(ActorRef<DependencyWorker.Message> dependencyWorker) {
 		if(!permutations.isEmpty()){
-			Tuple currenttask = this.permutations.get(0);
-			this.permutations.remove(0);
-			Column c = this.columns.get(currenttask.getA());
-			Column cc = this.columns.get(currenttask.getB());
+			int currenttask[] = this.permutations.get(this.permutations.size() - 1);
+			this.permutations.remove(this.permutations.size()-1);
+			Column c = this.columns.get(currenttask[0]);
+			Column cc = this.columns.get(currenttask[1]);
+
+			this.getContext().getLog().info("currenttask: File {},{} comparing File{},{}",c.getFileId(),c.getColId(), cc.getFileId(), cc.getColId());
 			dependencyWorker.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy,c.getFileId(), c.getColId(), cc.getFileId(), cc.getColId(), c.getColData(), cc.getColData()));
 		}
 
@@ -236,7 +239,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		if (!this.dependencyWorkers.contains(dependencyWorker)) {
 			this.dependencyWorkers.add(dependencyWorker);
 			this.getContext().watch(dependencyWorker);
-			if(this.batchMessages.size() != this.inputReaders.size()) {
+			if(permutations.isEmpty()) {
 				dependencyWorker.tell(new DependencyWorker.WaitingMessage(this.largeMessageProxy));
 			}
 			this.getContext().getLog().info("Message told to Dep Worker");
@@ -246,10 +249,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	}
 
 	private Behavior<Message> handle(CompletionMessage message) {
-		this.getContext().getLog().info("Hello from CompletionMessage");
 		ActorRef<DependencyWorker.Message> dependencyWorker = message.getDependencyWorker();
-		// If this was a reasonable result, I would probably do something with it and potentially generate more work ... for now, let's just generate a random, binary IND.
-		//this.getContext().getLog().info("!!!!!!!!!!new -Batchcount: {}", batchtoggle);
 		if (this.headerLines[0] != null && !(message.getResult().isEmpty())) {
 
 			for (Comparer com : message.getResult()){
@@ -271,12 +271,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 
 		}
 		handle_(dependencyWorker);
-		// I still don't know what task the worker could help me to solve ... but let me keep her busy.
-		// Once I found all unary INDs, I could check if this.discoverNaryDependencies is set to true and try to detect n-ary INDs as well!
-		//
-		//dependencyWorker.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy, 42));
-
-		// At some point, I am done with the discovery. That is when I should call my end method. Because I do not work on a completable task yet, I simply call it after some time.
+		if(this.permutations.isEmpty()) end();
 		return this;
 	}
 
@@ -293,7 +288,4 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		return this;
 	}
 
-	private void filltasks(){
-
-	}
 }
