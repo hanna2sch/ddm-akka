@@ -10,8 +10,7 @@ import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.Receive;
 import akka.actor.typed.receptionist.Receptionist;
 import akka.actor.typed.receptionist.ServiceKey;
-import de.ddm.actors.profiling.Tuple;
-import de.ddm.actors.profiling.Column;
+import de.ddm.actors.Guardian;
 import de.ddm.actors.patterns.LargeMessageProxy;
 import de.ddm.serialization.AkkaSerializable;
 import de.ddm.singletons.InputConfigurationSingleton;
@@ -25,9 +24,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-//TODO: Error:  Encoder(akka://ddm)| Failed to serialize oversized message [de.ddm.actors.profiling.DependencyWorker$TaskMessage].
-//akka.remote.OversizedPayloadException: Discarding oversized payload sent to Some(Actor[]):
-// max allowed size 262144 bytes. Message type [de.ddm.actors.profiling.DependencyWorker$TaskMessage].
 public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 
 	////////////////////
@@ -99,7 +95,6 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 
 	private DependencyMiner(ActorContext<Message> context) {
 		super(context);
-		//this.getContext().getLog().info("Hello from DepMiner Constructor");
 		this.inputFiles = InputConfigurationSingleton.get().getInputFiles();
 		this.headerLines = new String[this.inputFiles.length][];
 		this.inputReaders = new ArrayList<>(inputFiles.length);
@@ -111,7 +106,6 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 
 		this.dependencyWorkers = new ArrayList<>();
 		this.batchMessages = new ArrayList<>();
-		//this.getContext().getLog().info("Hello from DepMiner Constructor_end");
 		context.getSystem().receptionist().tell(Receptionist.register(dependencyMinerService, context.getSelf()));
 	}
 
@@ -128,8 +122,6 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	private int countResultCollector;
 	private final ActorRef<LargeMessageProxy.Message> largeMessageProxy;
 	private List<int[]> permutations = new ArrayList<>();
-	//private List<Tuple> working = new ArrayList<>();
-	//private List<Tuple> done = new ArrayList<>();
 	private final List<ActorRef<DependencyWorker.Message>> dependencyWorkers;
 	private List<Column> columns = new ArrayList<>();
 	////////////////////
@@ -163,7 +155,6 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	}
 
 	private Behavior<Message> handle(HeaderMessage message) {
-		//this.getContext().getLog().info("Hello from HeaderMEssage");
 		this.headerLines[message.getId()] = message.getHeader();
 		return this;
 	}
@@ -187,23 +178,9 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 			}
 		}
 		this.getContext().getLog().info("columnlistsize: {}, permutations: {}", this.columns.size(), this.permutations.size());
-
-		//TODO: wenn batch zu groß, dann sinnvoll splitten und erst dann zu batchMessage hinzufügen
-		//adding batching && batch confirmation
-		//this.getContext().getLog().info("Batch added, Tuple_size: {}", this.permutations.size());
 		return this;
 	}
 	private Behavior<Message> handle(ConfirmationMessage message) {
-		//bekommt ids von den batches wieder, die verglichen wurden
-		boolean check = false;
-		/*for (Tuple t : this.working){
-			if (t.equals(temp)){
-				this.done.add(t);
-				this.working.remove(t);
-				break;
-			}
-		}
-		this.getContext().getLog().info("pending: {}, working: {}, done: {}", this.permutations.size(), this.working.size(), this.done.size());*/
 		return this;
 	}
 
@@ -218,19 +195,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 			dependencyWorker.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy,c.getFileId(), c.getColId(), cc.getFileId(), cc.getColId(), c.getColData(), cc.getColData()));
 		}
 
-		/*if(!permutations.isEmpty()){
-			Tuple currenttask = this.permutations.get(0);
-			this.permutations.remove(0);
-			this.working.add(currenttask);
-			BatchMessage b=this.batchMessages.get(currenttask.getA());
-			BatchMessage bb=this.batchMessages.get(currenttask.getB());
-			try{
-				dependencyWorker.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy, b.getId(), b.getId(), bb.getId(), b.getBatch(), bb.getBatch()));
-			}catch(Exception e){
-				this.working.remove(currenttask);
-				this.permutations.add(currenttask);
-			}
-		} else if (this.working.isEmpty()) end();*/
+
 	}
 
 
@@ -280,6 +245,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		long discoveryTime = System.currentTimeMillis() - this.startTime;
 		this.getContext().getLog().info("Finished mining within {} ms!", discoveryTime);
 		this.getContext().getLog().info("Found {} INDs!", this.countResultCollector);
+		this.getContext().getLog().info("Please shutdown processes manually!");
 	}
 
 	private Behavior<Message> handle(Terminated signal) {

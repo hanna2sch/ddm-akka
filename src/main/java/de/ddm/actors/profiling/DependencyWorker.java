@@ -115,15 +115,6 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 			result.add(c_temp);
 			this.largeMessageProxy.tell(new LargeMessageProxy.SendMessage(new DependencyMiner.ConfirmationMessage(c_temp), message.getDependencyMinerLargeMessageProxy()));
 		}
-		/*	for(List<String> c : b){
-				int cc_count = 0;
-				for (List<String> cc : bb) {
-					if(c.containsAll(cc)) result.add(new Comparer(message.getBb_id(), message.getB_id(), cc_count, c_count));
-					if(cc.containsAll(c)) result.add(new Comparer(message.getB_id(), message.getBb_id(), c_count, cc_count));
-					cc_count +=1;
-				}
-				c_count +=1;
-			}*/
 		LargeMessageProxy.LargeMessage completionMessage = new DependencyMiner.CompletionMessage(this.getContext().getSelf(), result);
 		this.largeMessageProxy.tell(new LargeMessageProxy.SendMessage(completionMessage, message.getDependencyMinerLargeMessageProxy()));
 
