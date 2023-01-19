@@ -102,10 +102,10 @@ public class InputReader extends AbstractBehavior<InputReader.Message> {
 				break;
 			batch.add(line);
 		}
-
 		message.getReplyTo().tell(new DependencyMiner.BatchMessage(this.id, batch_transpose(batch)));
 		//this.getContext().getLog().info("Batch No {}", this.reader);
-		this.getContext().getLog().info(String.valueOf(batch_transpose(batch).size()));
+		//this.getContext().getLog().info("colnumber: " +String.valueOf(batch_transpose(batch).size()));
+		//this.getContext().getLog().info("collength: " + String.valueOf(batch_transpose(batch).get(0).size()));
 		return this;
 	}
 
@@ -127,7 +127,7 @@ public class InputReader extends AbstractBehavior<InputReader.Message> {
 			List<String> uniquecolumn = column.stream().distinct().collect(Collectors.toList());
 			result.add(uniquecolumn);
 		}
-		this.getContext().getLog().info(String.valueOf(result.size()));
+		//this.getContext().getLog().info(String.valueOf(result.size()));
 		return result;
 	}
 }

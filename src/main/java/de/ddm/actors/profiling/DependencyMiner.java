@@ -10,6 +10,8 @@ import akka.actor.typed.javadsl.Behaviors;
 import akka.actor.typed.javadsl.Receive;
 import akka.actor.typed.receptionist.Receptionist;
 import akka.actor.typed.receptionist.ServiceKey;
+import de.ddm.actors.profiling.Tuple;
+import de.ddm.actors.profiling.Column;
 import de.ddm.actors.patterns.LargeMessageProxy;
 import de.ddm.serialization.AkkaSerializable;
 import de.ddm.singletons.InputConfigurationSingleton;
@@ -21,6 +23,8 @@ import lombok.NoArgsConstructor;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
+
 //TODO: Error:  Encoder(akka://ddm)| Failed to serialize oversized message [de.ddm.actors.profiling.DependencyWorker$TaskMessage].
 //akka.remote.OversizedPayloadException: Discarding oversized payload sent to Some(Actor[]):
 // max allowed size 262144 bytes. Message type [de.ddm.actors.profiling.DependencyWorker$TaskMessage].
@@ -61,8 +65,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	@AllArgsConstructor
 	public static class ConfirmationMessage implements Message {
 		private static final long serialVersionUID = 4591192342652568030L;
-		int id;
-		int id_comp;
+		Comparer c;
 	}
 
 	@Getter
@@ -125,25 +128,17 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	private int countResultCollector;
 	private final ActorRef<LargeMessageProxy.Message> largeMessageProxy;
 	private List<Tuple> permutations = new ArrayList<>();
-	private List<Tuple> working = new ArrayList<>();
-	private List<Tuple> done = new ArrayList<>();
+	//private List<Tuple> working = new ArrayList<>();
+	//private List<Tuple> done = new ArrayList<>();
 	private final List<ActorRef<DependencyWorker.Message>> dependencyWorkers;
+	private List<Column> columns = new ArrayList<>();
 	////////////////////
 	// Actor Behavior //
 	////////////////////
-	@Getter
-	@AllArgsConstructor
-	private class Tuple{
-		private final int a;
-		private final int b;
-		boolean equals(Tuple temp){
-			if (temp.getA()==this.a && temp.getB()==this.b)
-				return true;
-			if (temp.getB()==this.a && temp.getA()==this.b)
-					return true;
-			return false;
-		}
-	}
+
+
+
+
 	@Override
 	public Receive<Message> createReceive() {
 		return newReceiveBuilder()
@@ -175,29 +170,52 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 
 
 	private Behavior<Message> handle(BatchMessage message) {
-		if (message.getBatch().size() != 0) {
-			this.batchMessages.add(message);
-			int temp = this.batchMessages.size()-1;
-			for(int i = 0; i<=temp; i++) {
-				Tuple tt = new Tuple(temp, i);
-				Tuple tt_inverted = new Tuple(i, temp);
-				if (!this.permutations.contains(tt) && !this.permutations.contains(tt_inverted))
-					this.permutations.add(new Tuple(temp, i));
+		if(message.getBatch().size() != 0){
+			List<List<String>> templist = message.getBatch();
+			int colnumber = 0;
+			int temp = this.columns.size();
+			for(List<String> tempentry : templist){
+				List<String> distict_tempentry = tempentry.stream().distinct().collect(Collectors.toList());
+				this.columns.add(new Column(message.getId(),colnumber, distict_tempentry));
+				for(int i = 0; i < temp; i++){
+					Tuple tt = new Tuple(temp, i);
+					Tuple tt_inverted = new Tuple(i, temp);
+					if(!this.permutations.contains(tt) && !this.permutations.contains(tt_inverted))
+						this.permutations.add(new Tuple(temp, i));
+				}
 			}
 		}
+		this.getContext().getLog().info("columnlistsize: {}, permutations: {}", this.columns.size(), this.permutations.size());
+
 		//TODO: wenn batch zu groß, dann sinnvoll splitten und erst dann zu batchMessage hinzufügen
 		//adding batching && batch confirmation
-		this.getContext().getLog().info("Batch added, Tuple_size: {}", this.permutations.size());
+		//this.getContext().getLog().info("Batch added, Tuple_size: {}", this.permutations.size());
 		return this;
 	}
 	private Behavior<Message> handle(ConfirmationMessage message) {
 		//bekommt ids von den batches wieder, die verglichen wurden
-
+		boolean check = false;
+		/*for (Tuple t : this.working){
+			if (t.equals(temp)){
+				this.done.add(t);
+				this.working.remove(t);
+				break;
+			}
+		}
+		this.getContext().getLog().info("pending: {}, working: {}, done: {}", this.permutations.size(), this.working.size(), this.done.size());*/
 		return this;
 	}
 
 	private void handle_(ActorRef<DependencyWorker.Message> dependencyWorker) {
 		if(!permutations.isEmpty()){
+			Tuple currenttask = this.permutations.get(0);
+			this.permutations.remove(0);
+			Column c = this.columns.get(currenttask.getA());
+			Column cc = this.columns.get(currenttask.getB());
+			dependencyWorker.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy,c.getFileId(), c.getColId(), cc.getFileId(), cc.getColId(), c.getColData(), cc.getColData()));
+		}
+
+		/*if(!permutations.isEmpty()){
 			Tuple currenttask = this.permutations.get(0);
 			this.permutations.remove(0);
 			this.working.add(currenttask);
@@ -209,24 +227,18 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 				this.working.remove(currenttask);
 				this.permutations.add(currenttask);
 			}
-		} else if (this.working.isEmpty()) end();
-		else end();
+		} else if (this.working.isEmpty()) end();*/
 	}
 
 
 	private Behavior<Message> handle(RegistrationMessage message) {
-		this.getContext().getLog().info("Hello from RegistrationMessage");
 		ActorRef<DependencyWorker.Message> dependencyWorker = message.getDependencyWorker();
 		if (!this.dependencyWorkers.contains(dependencyWorker)) {
 			this.dependencyWorkers.add(dependencyWorker);
 			this.getContext().watch(dependencyWorker);
-			// The worker should get some work ... let me send her something before I figure out what I actually want from her.
-			// I probably need to idle the worker for a while, if I do not have work for it right now ... (see master/worker pattern)
 			if(this.batchMessages.size() != this.inputReaders.size()) {
-				//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchtoggle);
 				dependencyWorker.tell(new DependencyWorker.WaitingMessage(this.largeMessageProxy));
 			}
-			//dependencyWorker.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy, 42));
 			this.getContext().getLog().info("Message told to Dep Worker");
 			handle_(dependencyWorker);
 		}
@@ -234,7 +246,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	}
 
 	private Behavior<Message> handle(CompletionMessage message) {
-		//this.getContext().getLog().info("Hello from CompletionMessage");
+		this.getContext().getLog().info("Hello from CompletionMessage");
 		ActorRef<DependencyWorker.Message> dependencyWorker = message.getDependencyWorker();
 		// If this was a reasonable result, I would probably do something with it and potentially generate more work ... for now, let's just generate a random, binary IND.
 		//this.getContext().getLog().info("!!!!!!!!!!new -Batchcount: {}", batchtoggle);
@@ -251,7 +263,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 					List<InclusionDependency> inds = new ArrayList<>(1);
 					InclusionDependency ind = new InclusionDependency(dependentFile, dependentAttributes, referencedFile, referencedAttributes);
 					inds.add(ind);
-					//this.getContext().getLog().info("!!!!!!!!!!!!!!!!!!!!!!!! Dep found: File{}Col{}->File{}Col{}", com.getFileid(), com.getCompare_colid(), com.getCompare_fileid(), com.getCompare_colid());
+					this.getContext().getLog().info("!!!!!!!!!!!!!!!!!!!!!!!! Dep found: File{}Col{}->File{}Col{}", com.getFileid(), com.getCompare_colid(), com.getCompare_fileid(), com.getCompare_colid());
 					countResultCollector += inds.size();
 					this.resultCollector.tell(new ResultCollector.ResultMessage(inds));
 				}

@@ -41,11 +41,12 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 	public static class TaskMessage implements Message {
 		private static final long serialVersionUID = -4667745204456518160L;
 		ActorRef<LargeMessageProxy.Message> dependencyMinerLargeMessageProxy;
-		int task;
-		int b_id;
+		int f_id;
+		int c_id;
+		int ff_id;
 		int bb_id;
-		List<List<String>> b;
-		List<List<String>> bb;
+		List<String> b;
+		List<String> bb;
 	}
 	@Getter
 	@NoArgsConstructor
@@ -102,12 +103,19 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 
 	private Behavior<Message> handle(TaskMessage message) {
 		this.getContext().getLog().info("Working!");
-		// I should probably know how to solve this task, but for now I just pretend some work...
-		List<List<String>> b = message.getB();
-		List<List<String>> bb = message.getBb();
-		int c_count = 0;
+		List<String> b = message.getB();
+		List<String> bb = message.getBb();
 		List<Comparer> result = new ArrayList<>();
-			for(List<String> c : b){
+		if(b.containsAll(bb)) {
+			Comparer c_temp = new Comparer(message.getF_id(),message.getFf_id(),message.getC_id(), message.getBb_id());
+			result.add(c_temp);
+			this.largeMessageProxy.tell(new LargeMessageProxy.SendMessage(new DependencyMiner.ConfirmationMessage(c_temp), message.getDependencyMinerLargeMessageProxy()));
+		} else if (bb.containsAll(b)) {
+			Comparer c_temp = new Comparer(message.getFf_id(),message.getF_id(),message.getBb_id(), message.getC_id());
+			result.add(c_temp);
+			this.largeMessageProxy.tell(new LargeMessageProxy.SendMessage(new DependencyMiner.ConfirmationMessage(c_temp), message.getDependencyMinerLargeMessageProxy()));
+		}
+		/*	for(List<String> c : b){
 				int cc_count = 0;
 				for (List<String> cc : bb) {
 					if(c.containsAll(cc)) result.add(new Comparer(message.getBb_id(), message.getB_id(), cc_count, c_count));
@@ -115,11 +123,9 @@ public class DependencyWorker extends AbstractBehavior<DependencyWorker.Message>
 					cc_count +=1;
 				}
 				c_count +=1;
-			}
-		LargeMessageProxy.LargeMessage confirmationMessage = new DependencyMiner.ConfirmationMessage(message.getB_id(), message.getBb_id());
+			}*/
 		LargeMessageProxy.LargeMessage completionMessage = new DependencyMiner.CompletionMessage(this.getContext().getSelf(), result);
 		this.largeMessageProxy.tell(new LargeMessageProxy.SendMessage(completionMessage, message.getDependencyMinerLargeMessageProxy()));
-		this.largeMessageProxy.tell(new LargeMessageProxy.SendMessage(confirmationMessage, message.getDependencyMinerLargeMessageProxy()));
 
 		return this;
 	}
