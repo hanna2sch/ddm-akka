@@ -105,7 +105,7 @@ public class InputReader extends AbstractBehavior<InputReader.Message> {
 
 		message.getReplyTo().tell(new DependencyMiner.BatchMessage(this.id, batch_transpose(batch)));
 		//this.getContext().getLog().info("Batch No {}", this.reader);
-		//this.getContext().getLog().info(String.valueOf(batch_transpose(batch).size()));
+		this.getContext().getLog().info(String.valueOf(batch_transpose(batch).size()));
 		return this;
 	}
 

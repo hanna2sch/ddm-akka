@@ -1,5 +1,6 @@
 package de.ddm.actors.profiling;
 
+import akka.actor.Actor;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.Behavior;
 import akka.actor.typed.Terminated;
@@ -58,6 +59,15 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	@Getter
 	@NoArgsConstructor
 	@AllArgsConstructor
+	public static class ConfirmationMessage implements Message {
+		private static final long serialVersionUID = 4591192342652568030L;
+		int id;
+		int id_comp;
+	}
+
+	@Getter
+	@NoArgsConstructor
+	@AllArgsConstructor
 	public static class RegistrationMessage implements Message {
 		private static final long serialVersionUID = -4025238529984914107L;
 		ActorRef<DependencyWorker.Message> dependencyWorker;
@@ -100,7 +110,6 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		this.batchMessages = new ArrayList<>();
 		//this.getContext().getLog().info("Hello from DepMiner Constructor_end");
 		context.getSystem().receptionist().tell(Receptionist.register(dependencyMinerService, context.getSelf()));
-		tasks = new ArrayList<>();
 	}
 
 	/////////////////
@@ -115,13 +124,26 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 	private final ActorRef<ResultCollector.Message> resultCollector;
 	private int countResultCollector;
 	private final ActorRef<LargeMessageProxy.Message> largeMessageProxy;
-
+	private List<Tuple> permutations = new ArrayList<>();
+	private List<Tuple> working = new ArrayList<>();
+	private List<Tuple> done = new ArrayList<>();
 	private final List<ActorRef<DependencyWorker.Message>> dependencyWorkers;
-	private final List<Task> tasks;
 	////////////////////
 	// Actor Behavior //
 	////////////////////
-
+	@Getter
+	@AllArgsConstructor
+	private class Tuple{
+		private final int a;
+		private final int b;
+		boolean equals(Tuple temp){
+			if (temp.getA()==this.a && temp.getB()==this.b)
+				return true;
+			if (temp.getB()==this.a && temp.getA()==this.b)
+					return true;
+			return false;
+		}
+	}
 	@Override
 	public Receive<Message> createReceive() {
 		return newReceiveBuilder()
@@ -129,6 +151,7 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 				.onMessage(BatchMessage.class, this::handle)
 				.onMessage(HeaderMessage.class, this::handle)
 				.onMessage(RegistrationMessage.class, this::handle)
+				.onMessage(ConfirmationMessage.class, this::handle)
 				.onMessage(CompletionMessage.class, this::handle)
 				.onSignal(Terminated.class, this::handle)
 				.build();
@@ -152,37 +175,44 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 
 
 	private Behavior<Message> handle(BatchMessage message) {
-		if (message.getBatch().size() != 0)
+		if (message.getBatch().size() != 0) {
 			this.batchMessages.add(message);
+			int temp = this.batchMessages.size()-1;
+			for(int i = 0; i<=temp; i++) {
+				Tuple tt = new Tuple(temp, i);
+				Tuple tt_inverted = new Tuple(i, temp);
+				if (!this.permutations.contains(tt) && !this.permutations.contains(tt_inverted))
+					this.permutations.add(new Tuple(temp, i));
+			}
+		}
+		//TODO: wenn batch zu groß, dann sinnvoll splitten und erst dann zu batchMessage hinzufügen
+		//adding batching && batch confirmation
+		this.getContext().getLog().info("Batch added, Tuple_size: {}", this.permutations.size());
+		return this;
+	}
+	private Behavior<Message> handle(ConfirmationMessage message) {
+		//bekommt ids von den batches wieder, die verglichen wurden
+
 		return this;
 	}
 
-	private int count = 0;
-	private int count2 = 0;
-	private boolean batchtoggle = false;
-	private void handle(ActorRef<DependencyWorker.Message> depW){ //TODO: Dependencyworker muss hier Arbeit zugewiesen bekommen
-		// tasks.add(new Task(count, count2, this.batchMessages.get(this.count).getBatch(), this.batchMessages.get(this.count2).getBatch()));
-		this.getContext().getLog().info("inputreadersize: {}, count: {}, batchtoggle: {}", inputReaders.size(), count, batchtoggle);
-		if(this.batchMessages.size() != this.inputReaders.size()){
-			batchtoggle = true;
-			depW.tell(new DependencyWorker.WaitingMessage(this.largeMessageProxy));
-		}
-		else if(this.count >= this.inputReaders.size() && !this.batchtoggle) this.end();
-		else if (this.count >= this.batchMessages.size()&& this.batchtoggle) return;
-		else {
-			tasks.add(new Task(count, count2, this.batchMessages.get(this.count).getBatch(), this.batchMessages.get(this.count2).getBatch()));
-			BatchMessage b = this.batchMessages.get(this.count);
-			BatchMessage bb = this.batchMessages.get(this.count2);
-			this.count2 += 1;
-			if (this.count2 >= this.batchMessages.size()) {
-				this.count += 1;
-				this.count2 = this.count;
+	private void handle_(ActorRef<DependencyWorker.Message> dependencyWorker) {
+		if(!permutations.isEmpty()){
+			Tuple currenttask = this.permutations.get(0);
+			this.permutations.remove(0);
+			this.working.add(currenttask);
+			BatchMessage b=this.batchMessages.get(currenttask.getA());
+			BatchMessage bb=this.batchMessages.get(currenttask.getB());
+			try{
+				dependencyWorker.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy, b.getId(), b.getId(), bb.getId(), b.getBatch(), bb.getBatch()));
+			}catch(Exception e){
+				this.working.remove(currenttask);
+				this.permutations.add(currenttask);
 			}
-			this.batchtoggle =true;
-			//TODO: implement following with task-organizer
-			depW.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy, b.getId(), b.getId(), bb.getId(), b.getBatch(), bb.getBatch()));
-		}
+		} else if (this.working.isEmpty()) end();
+		else end();
 	}
+
 
 	private Behavior<Message> handle(RegistrationMessage message) {
 		this.getContext().getLog().info("Hello from RegistrationMessage");
@@ -193,13 +223,12 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 			// The worker should get some work ... let me send her something before I figure out what I actually want from her.
 			// I probably need to idle the worker for a while, if I do not have work for it right now ... (see master/worker pattern)
 			if(this.batchMessages.size() != this.inputReaders.size()) {
-				batchtoggle =true;
 				//this.getContext().getLog().info("!!!!!!!!!!new Batchcount: {}", batchtoggle);
 				dependencyWorker.tell(new DependencyWorker.WaitingMessage(this.largeMessageProxy));
 			}
 			//dependencyWorker.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy, 42));
 			this.getContext().getLog().info("Message told to Dep Worker");
-			handle(dependencyWorker);
+			handle_(dependencyWorker);
 		}
 		return this;
 	}
@@ -208,7 +237,6 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		//this.getContext().getLog().info("Hello from CompletionMessage");
 		ActorRef<DependencyWorker.Message> dependencyWorker = message.getDependencyWorker();
 		// If this was a reasonable result, I would probably do something with it and potentially generate more work ... for now, let's just generate a random, binary IND.
-		this.batchtoggle =false;
 		//this.getContext().getLog().info("!!!!!!!!!!new -Batchcount: {}", batchtoggle);
 		if (this.headerLines[0] != null && !(message.getResult().isEmpty())) {
 
@@ -230,14 +258,13 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 			}
 
 		}
-		handle(dependencyWorker);
+		handle_(dependencyWorker);
 		// I still don't know what task the worker could help me to solve ... but let me keep her busy.
 		// Once I found all unary INDs, I could check if this.discoverNaryDependencies is set to true and try to detect n-ary INDs as well!
 		//
 		//dependencyWorker.tell(new DependencyWorker.TaskMessage(this.largeMessageProxy, 42));
 
 		// At some point, I am done with the discovery. That is when I should call my end method. Because I do not work on a completable task yet, I simply call it after some time.
-		if (this.count >= this.inputReaders.size() && !this.batchtoggle) this.end();
 		return this;
 	}
 
@@ -252,5 +279,9 @@ public class DependencyMiner extends AbstractBehavior<DependencyMiner.Message> {
 		ActorRef<DependencyWorker.Message> dependencyWorker = signal.getRef().unsafeUpcast();
 		this.dependencyWorkers.remove(dependencyWorker);
 		return this;
+	}
+
+	private void filltasks(){
+
 	}
 }
